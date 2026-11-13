@@ -3,9 +3,80 @@ import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {HDRLoader} from 'three/addons/loaders/HDRLoader.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {ImprovedNoise} from 'three/addons/math/ImprovedNoise.js';
 
 let camera, scene, renderer, cube, controls;
 const base = import.meta.env.BASE_URL;
+const noise = new ImprovedNoise();
+
+function createSphere(radius) {
+  const geometry = new THREE.SphereGeometry(radius, 64, 64);
+  const positions = geometry.attributes.position;
+  const offset = Math.random() * 100;
+
+  for (let i = 0; i < positions.count; i++) {
+    const x = positions.getX(i);
+    const y = positions.getY(i);
+    const z = positions.getZ(i);
+    const length = Math.hypot(x, y, z);
+
+    const bump =
+      noise.noise(x * 1.5 + offset, y * 1.5 + offset * 2, z * 1.5 - offset) *
+      radius *
+      0.04;
+
+    const scale = (length + bump) / length;
+    positions.setXYZ(i, x * scale, y * scale, z * scale);
+  }
+
+  geometry.computeVertexNormals();
+
+  const material = new THREE.MeshStandardMaterial({
+    color: 'white',
+    roughness: 1,
+  });
+
+  return new THREE.Mesh(geometry, material);
+}
+
+function createSnowman() {
+  const bottomSphere = createSphere(3);
+  const middleSphere = createSphere(2);
+  const topSphere = createSphere(1);
+
+  middleSphere.position.y = 4.5;
+  topSphere.position.y = 2.5;
+
+  bottomSphere.add(middleSphere);
+  middleSphere.add(topSphere);
+
+  const eyeGeometry = new THREE.SphereGeometry(0.12, 16, 16);
+  const eyeMaterial = new THREE.MeshStandardMaterial({
+    color: 0x080808,
+    emissive: 0x080808,
+    emissiveIntensity: 0.2,
+    roughness: 1,
+  });
+
+  for (const x of [-0.35, 0.35]) {
+    const eye = new THREE.Mesh(eyeGeometry, eyeMaterial);
+    eye.position.set(x, 0.3, 0.9);
+    topSphere.add(eye);
+  }
+
+  const noseGeometry = new THREE.ConeGeometry(0.14, 0.8, 8);
+  const noseMaterial = new THREE.MeshStandardMaterial({
+    color: 0xff7518,
+    roughness: 1,
+  });
+  const nose = new THREE.Mesh(noseGeometry, noseMaterial);
+
+  nose.rotation.x = Math.PI / 2;
+  nose.position.set(0, 0.15, 1.3);
+  topSphere.add(nose);
+
+  return bottomSphere;
+}
 
 function init() {
   scene = new THREE.Scene();
@@ -21,11 +92,8 @@ function init() {
   renderer.setAnimationLoop(animate);
   document.body.appendChild(renderer.domElement);
 
-  const geometry = new THREE.BoxGeometry(1, 1, 1);
-
-  const material = new THREE.MeshPhongMaterial({color: 0x00ff00});
-  cube = new THREE.Mesh(geometry, material);
-  // scene.add(cube);
+  const snowman = createSnowman();
+  scene.add(snowman);
 
   const axesHelper = new THREE.AxesHelper(5);
   scene.add(axesHelper);
@@ -43,12 +111,13 @@ function init() {
   // cube.scale.set(2,2,2,);
 
   // lights
-  const light = new THREE.AmbientLight(0x404040); // soft white light
-  //scene.add(light);
-
-  // White directional light at half intensity shining from the top.
-  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.9);
-  //scene.add(directionalLight);
+  const blueLight = new THREE.DirectionalLight(0x0000ff, 100);
+  const greenLight = new THREE.DirectionalLight(0x00ff00, 100);
+  const redLight = new THREE.DirectionalLight(0xff0000, 100);
+  blueLight.position.set(0, 1, 0);
+  greenLight.position.set(1, 0, 0);
+  redLight.position.set(0, 0, 1);
+  scene.add(blueLight, greenLight, redLight);
 
   controls = new OrbitControls(camera, renderer.domElement);
   controls.listenToKeyEvents(window); // optional
@@ -61,13 +130,13 @@ function init() {
   controls.screenSpacePanning = false;
 
   controls.minDistance = 1;
-  controls.maxDistance = 10;
+  controls.maxDistance = 100;
   window.addEventListener('resize', onWindowResize);
 }
 
 async function loadHDR() {
   const loader = new HDRLoader();
-  const url = `${base}hdr/kloofendal_48d_partly_cloudy_puresky_1k.hdr`;
+  const url = `${base}hdr/passendorf_snow_4k.hdr`;
 
   try {
     const envMap = await loader.loadAsync(url);
@@ -121,5 +190,5 @@ function render() {
 
 init();
 loadHDR();
-loadModels(`${base}models/bottle/WaterBottle.gltf`);
+// loadModels(`${base}models/bottle/WaterBottle.gltf`);
 console.log(scene);
