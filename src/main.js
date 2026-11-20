@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {HDRLoader} from 'three/addons/loaders/HDRLoader.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {DRACOLoader} from 'three/examples/jsm/loaders/DRACOLoader.js';
 import {ImprovedNoise} from 'three/addons/math/ImprovedNoise.js';
 
 let camera, scene, renderer, cube, controls;
@@ -39,16 +40,27 @@ function createSphere(radius) {
   return new THREE.Mesh(geometry, material);
 }
 
-function createSnowman() {
+function moveObjectToGround(object) {
+  const bounds = new THREE.Box3().setFromObject(object);
+  object.position.y += -bounds.min.y;
+}
+
+function createSnowman(height = 1.8) {
   const bottomSphere = createSphere(3);
   const middleSphere = createSphere(2);
   const topSphere = createSphere(1);
 
-  middleSphere.position.y = 4.5;
-  topSphere.position.y = 2.5;
+  // bottomSphere radius + middleSphere radius - overlap
+  middleSphere.position.y = 3 + 2 - 0.5;
+  // middleSphere radius + topSphere radius - overlap
+  topSphere.position.y = 2 + 1 - 0.5;
 
   bottomSphere.add(middleSphere);
   middleSphere.add(topSphere);
+
+  const virtualHeight = 11;
+  bottomSphere.scale.setScalar(height / virtualHeight);
+  moveObjectToGround(bottomSphere);
 
   const eyeGeometry = new THREE.SphereGeometry(0.12, 16, 16);
   const eyeMaterial = new THREE.MeshStandardMaterial({
@@ -155,16 +167,16 @@ async function loadHDR() {
   }
 }
 
-async function loadModels(url) {
-  const loader = new GLTFLoader();
+async function loadModel(url) {
+  const draco = new DRACOLoader().setDecoderPath('/draco/');
+  const loader = new GLTFLoader().setDRACOLoader(draco);
 
   try {
     const gltf = await loader.loadAsync(url);
     const model = gltf.scene;
-    // model.scale.set(10,10,10);
-    model.scale.setScalar(10);
     scene.add(model);
     console.log('Model loaded:', model);
+    return model;
   } catch (error) {
     console.error('Model loading failed:', error);
   }
@@ -190,5 +202,16 @@ function render() {
 
 init();
 loadHDR();
-// loadModels(`${base}models/bottle/WaterBottle.gltf`);
+loadModel(`${base}models/spruce-tree/spruce-tree.glb`).then((model) => {
+  model.position.set(2, 0, -2);
+  moveObjectToGround(model);
+});
+
+loadModel(`${base}models/basking-alligator/basking-alligator.glb`).then(
+  (model) => {
+    model.position.set(-0, 0, 0);
+    moveObjectToGround(model);
+  },
+);
+
 console.log(scene);
