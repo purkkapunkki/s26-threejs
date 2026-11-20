@@ -124,6 +124,51 @@ function createSnowman(height = 1.8) {
   return bottomSphere;
 }
 
+function createIgloo() {
+  const igloo = new THREE.Group();
+
+  const snowMaterial = new THREE.MeshStandardMaterial({
+    color: 0xeaf4f8,
+    roughness: 0.75,
+  });
+
+  const domeGeometry = new THREE.SphereGeometry(
+    2.4,
+    32,
+    16,
+    0,
+    Math.PI * 2,
+    0,
+    Math.PI / 2,
+  );
+  const dome = new THREE.Mesh(domeGeometry, snowMaterial);
+  igloo.add(dome);
+
+  const openingMaterial = new THREE.MeshStandardMaterial({
+    color: 0x3d555f,
+    roughness: 1,
+  });
+  const openingGeometry = new THREE.CylinderGeometry(0.72, 0.72, 0.12, 24);
+  const opening = new THREE.Mesh(openingGeometry, openingMaterial);
+  opening.rotation.x = Math.PI / 2;
+  opening.position.set(0, 0.72, 2.28);
+  igloo.add(opening);
+
+  const archGeometry = new THREE.TorusGeometry(0.72, 0.16, 12, 24, Math.PI);
+  const arch = new THREE.Mesh(archGeometry, snowMaterial);
+  arch.position.set(0, 0.72, 2.36);
+  igloo.add(arch);
+
+  igloo.traverse((child) => {
+    if (child.isMesh) {
+      child.castShadow = true;
+      child.receiveShadow = true;
+    }
+  });
+
+  return igloo;
+}
+
 function init() {
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(
@@ -151,6 +196,11 @@ function init() {
     }
   });
   scene.add(snowman);
+
+  const igloo = createIgloo();
+  igloo.position.set(-5, 0, -3);
+  moveObjectToGround(igloo, getTerrainHeight(-5, -3));
+  scene.add(igloo);
 
   scene.add(createTerrain());
 
