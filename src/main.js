@@ -274,7 +274,7 @@ async function loadHDR() {
 }
 
 async function loadModel(url) {
-  const draco = new DRACOLoader().setDecoderPath('/draco/');
+  const draco = new DRACOLoader().setDecoderPath(`${base}draco/`);
   const loader = new GLTFLoader().setDRACOLoader(draco);
 
   try {
