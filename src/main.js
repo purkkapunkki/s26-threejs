@@ -9,6 +9,39 @@ import {ImprovedNoise} from 'three/addons/math/ImprovedNoise.js';
 let camera, scene, renderer, cube, controls;
 const base = import.meta.env.BASE_URL;
 const noise = new ImprovedNoise();
+const terrainSize = 40;
+
+function getTerrainHeight(x, z) {
+  const broadHills = noise.noise(x * 0.08, z * 0.08, 20) * 3;
+  const smallHills = noise.noise(x * 0.22, z * 0.22, 70) * 0.6;
+
+  return broadHills + smallHills;
+}
+
+function createTerrain() {
+  const geometry = new THREE.PlaneGeometry(terrainSize, terrainSize, 128, 128);
+  geometry.rotateX(-Math.PI / 2);
+
+  const positions = geometry.attributes.position;
+
+  for (let i = 0; i < positions.count; i++) {
+    const x = positions.getX(i);
+    const z = positions.getZ(i);
+    positions.setY(i, getTerrainHeight(x, z));
+  }
+
+  geometry.computeVertexNormals();
+
+  const material = new THREE.MeshStandardMaterial({
+    color: 0xf4f7fa,
+    roughness: 0.9,
+  });
+
+  const terrain = new THREE.Mesh(geometry, material);
+  terrain.castShadow = true;
+  terrain.receiveShadow = true;
+  return terrain;
+}
 
 function createSphere(radius) {
   const geometry = new THREE.SphereGeometry(radius, 64, 64);
@@ -40,9 +73,10 @@ function createSphere(radius) {
   return new THREE.Mesh(geometry, material);
 }
 
-function moveObjectToGround(object) {
+function moveObjectToGround(object, groundHeight = 0) {
+  object.updateWorldMatrix(true, true);
   const bounds = new THREE.Box3().setFromObject(object);
-  object.position.y += -bounds.min.y;
+  object.position.y += groundHeight - bounds.min.y;
 }
 
 function createSnowman(height = 1.8) {
@@ -101,11 +135,24 @@ function init() {
 
   renderer = new THREE.WebGLRenderer({antialias: true});
   renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.setAnimationLoop(animate);
   document.body.appendChild(renderer.domElement);
 
   const snowman = createSnowman();
+  snowman.position.set(0, 0, 0);
+  moveObjectToGround(snowman, getTerrainHeight(0, 0));
+  snowman.traverse((child) => {
+    if (child.isMesh) {
+      child.castShadow = true;
+      child.receiveShadow = true;
+    }
+  });
   scene.add(snowman);
+
+  scene.add(createTerrain());
 
   const axesHelper = new THREE.AxesHelper(5);
   scene.add(axesHelper);
@@ -123,13 +170,22 @@ function init() {
   // cube.scale.set(2,2,2,);
 
   // lights
+  const sunlight = new THREE.DirectionalLight(0xfff4e5, 2);
+  sunlight.position.set(-10, 15, 8);
+  sunlight.castShadow = true;
+  sunlight.shadow.mapSize.set(2048, 2048);
+  sunlight.shadow.camera.left = -20;
+  sunlight.shadow.camera.right = 20;
+  sunlight.shadow.camera.top = 20;
+  sunlight.shadow.camera.bottom = -20;
+
   const blueLight = new THREE.DirectionalLight(0x0000ff, 100);
   const greenLight = new THREE.DirectionalLight(0x00ff00, 100);
   const redLight = new THREE.DirectionalLight(0xff0000, 100);
   blueLight.position.set(0, 1, 0);
   greenLight.position.set(1, 0, 0);
   redLight.position.set(0, 0, 1);
-  scene.add(blueLight, greenLight, redLight);
+  scene.add(sunlight, blueLight, greenLight, redLight);
 
   controls = new OrbitControls(camera, renderer.domElement);
   controls.listenToKeyEvents(window); // optional
@@ -142,7 +198,7 @@ function init() {
   controls.screenSpacePanning = false;
 
   controls.minDistance = 1;
-  controls.maxDistance = 100;
+  controls.maxDistance = 20;
   window.addEventListener('resize', onWindowResize);
 }
 
@@ -174,6 +230,12 @@ async function loadModel(url) {
   try {
     const gltf = await loader.loadAsync(url);
     const model = gltf.scene;
+    model.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
     scene.add(model);
     console.log('Model loaded:', model);
     return model;
@@ -204,13 +266,19 @@ init();
 loadHDR();
 loadModel(`${base}models/spruce-tree/spruce-tree.glb`).then((model) => {
   model.position.set(2, 0, -2);
-  moveObjectToGround(model);
+  moveObjectToGround(
+    model,
+    getTerrainHeight(model.position.x, model.position.z),
+  );
 });
 
 loadModel(`${base}models/basking-alligator/basking-alligator.glb`).then(
   (model) => {
     model.position.set(-0, 0, 0);
-    moveObjectToGround(model);
+    moveObjectToGround(
+      model,
+      getTerrainHeight(model.position.x, model.position.z),
+    );
   },
 );
 
